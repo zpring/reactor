@@ -34,11 +34,24 @@ description = 'Bill of materials to make sure a consistent set of versions is us
 
 repositories {
 	mavenCentral()
-	maven { url = 'https://repo.spring.io/milestone' }
-	maven { url = "https://oss.sonatype.org/content/repositories/releases/" }
-	if (version.endsWith('-SNAPSHOT')) {
-		mavenLocal()
-		maven { url = 'https://repo.spring.io/snapshot' }
+	if (System.getenv("RELEASE_TRAIN_MAVEN_REPOSITORY_URL") != null) {
+		repositories {
+			maven {
+				name = "Release Train"
+				url = System.getenv("RELEASE_TRAIN_MAVEN_REPOSITORY_URL")
+				credentials {
+					username = System.getenv("RELEASE_TRAIN_MAVEN_REPOSITORY_USERNAME")
+					password = System.getenv("RELEASE_TRAIN_MAVEN_REPOSITORY_PASSWORD")
+				}
+			}
+		}
+	} else {
+		maven { url = 'https://repo.spring.io/milestone' }
+		maven { url = "https://oss.sonatype.org/content/repositories/releases/" }
+		if (version.endsWith('-SNAPSHOT')) {
+			mavenLocal()
+			maven { url = 'https://repo.spring.io/snapshot' }
+		}
 	}
 }
 
@@ -152,6 +165,12 @@ publishing {
 				}
 			}
 		}
+		if (project.hasProperty("deploymentRepository")) {
+			maven {
+				name = 'Deployment'
+				url = project.property("deploymentRepository")
+			}
+		}
 	}
 
 	publications {
@@ -219,22 +238,5 @@ if (rootProject.hasProperty("artifactory_publish_password")) {
 
 	artifactoryPublish {
 		publications(publishing.publications.mavenJava)
-	}
-}
-
-if (qualifyVersion("$version") in ["RELEASE", "MILESTONE"] || rootProject.hasProperty("forceSigning")) {
-	apply plugin: 'signing'
-
-	signing {
-		//requiring signature if there is a publish task that is not to MavenLocal
-		required {  gradle.taskGraph.allTasks.any { it.name.toLowerCase().contains("publish")	&& !it.name.contains("MavenLocal") } }
-		def signingKey = findProperty("signingKey")
-		def signingPassword = findProperty("signingPassword")
-
-		useInMemoryPgpKeys(signingKey, signingPassword)
-
-		afterEvaluate {
-			sign publishing.publications.mavenJava
-		}
 	}
 }
